@@ -8,6 +8,7 @@ from agent.planner import create_plan
 from agent.coder import generate_code
 from agent.tester import run_tests
 from agent.memory_agent import recall_memory
+from agent.task_decomposer import decompose_task
 
 from utils.diff_utils import show_diff, apply_patch
 from memory.memory_store import add_memory
@@ -17,126 +18,154 @@ def run_agent(task):
 
     repo = os.getcwd()
 
-    print("\n===== AI Coding Agent =====\n")
+    print("\n=================================")
+    print("        AI CODING AGENT")
+    print("=================================\n")
 
     print("Repository:", repo)
 
-    # ---------------------------------------------------
-    # 1. Recall previous memory
-    # ---------------------------------------------------
+    # ---------------------------------------
+    # 1. Decompose task
+    # ---------------------------------------
 
-    print("\nChecking memory for similar tasks...\n")
+    print("\nDecomposing task...\n")
 
-    memory_context = recall_memory(task)
+    steps = decompose_task(task)
 
-    if memory_context:
-        print(memory_context)
+    if not steps:
+        steps = [task]
 
-    # ---------------------------------------------------
-    # 2. Index repository into Qdrant
-    # ---------------------------------------------------
+    for i, step in enumerate(steps, start=1):
+        print(f"{i}. {step}")
+
+    # ---------------------------------------
+    # 2. Index repo
+    # ---------------------------------------
 
     print("\nIndexing repository...\n")
 
     index_repo(repo)
 
-    # ---------------------------------------------------
-    # 3. Retrieve relevant files
-    # ---------------------------------------------------
+    # ---------------------------------------
+    # 3. Execute each step
+    # ---------------------------------------
 
-    print("\nRetrieving relevant files...\n")
+    for step in steps:
 
-    files = retrieve_files(repo, task)
+        print("\n=================================")
+        print("Executing Step:", step)
+        print("=================================\n")
 
-    print("Retrieved files:")
+        # ---------------------------------------
+        # Memory recall
+        # ---------------------------------------
 
-    for f in files:
-        print(" -", f["path"])
+        memory_context = recall_memory(step)
 
-    # ---------------------------------------------------
-    # 4. File selection agent
-    # ---------------------------------------------------
+        if memory_context:
+            print("\nRelevant memory found:\n")
+            print(memory_context)
 
-    print("\nSelecting most relevant files...\n")
+        # ---------------------------------------
+        # Retrieve relevant files
+        # ---------------------------------------
 
-    selected_files = select_files(task, files)
+        print("\nRetrieving relevant files...\n")
 
-    for f in selected_files:
-        print("Selected:", f["path"])
+        files = retrieve_files(repo, step)
 
-    # ---------------------------------------------------
-    # 5. Planning
-    # ---------------------------------------------------
+        print("Retrieved files:")
 
-    print("\nGenerating plan...\n")
+        for f in files:
+            print(" -", f["path"])
 
-    plan = create_plan(task + "\n" + memory_context, selected_files)
+        # ---------------------------------------
+        # File selection
+        # ---------------------------------------
 
-    print(plan)
+        print("\nSelecting most relevant files...\n")
 
-    # ---------------------------------------------------
-    # 6. Generate code edits
-    # ---------------------------------------------------
+        selected_files = select_files(step, files)
 
-    print("\nGenerating code modifications...\n")
+        for f in selected_files:
+            print("Selected:", f["path"])
 
-    response = generate_code(task, plan, selected_files)
+        if not selected_files:
+            selected_files = files
 
-    print(response)
+        # ---------------------------------------
+        # Planning
+        # ---------------------------------------
 
-    # ---------------------------------------------------
-    # 7. Parse generated patches
-    # ---------------------------------------------------
+        print("\nGenerating plan...\n")
 
-    matches = re.findall(
-        r"FILE:\s*(.*?)\nNEW_CODE:\n([\s\S]*?)(?=\nFILE:|\Z)",
-        response
-    )
+        plan = create_plan(step + "\n" + memory_context, selected_files)
 
-    if not matches:
-        print("\nNo code modifications proposed.\n")
+        print(plan)
 
-    # ---------------------------------------------------
-    # 8. Show diff and request approval
-    # ---------------------------------------------------
+        # ---------------------------------------
+        # Code generation
+        # ---------------------------------------
 
-    for file_path, new_code in matches:
+        print("\nGenerating code modifications...\n")
 
-        try:
+        response = generate_code(step, plan, selected_files)
 
-            with open(file_path, "r") as f:
-                old_code = f.read()
+        print(response)
 
-            print("\n----------------------------------")
-            print("File:", file_path)
-            print("----------------------------------\n")
+        # ---------------------------------------
+        # Parse patches
+        # ---------------------------------------
 
-            show_diff(old_code, new_code)
+        matches = re.findall(
+            r"FILE:\s*(.*?)\nNEW_CODE:\n([\s\S]*?)(?=\nFILE:|\Z)",
+            response
+        )
 
-            apply_patch(file_path, new_code)
+        if not matches:
+            print("\nNo code modifications proposed.\n")
 
-        except FileNotFoundError:
-            print("File not found:", file_path)
+        # ---------------------------------------
+        # Diff preview + approval
+        # ---------------------------------------
 
-    # ---------------------------------------------------
-    # 9. Run tests
-    # ---------------------------------------------------
+        for file_path, new_code in matches:
 
-    print("\nRunning tests...\n")
+            try:
 
-    test_output = run_tests()
+                with open(file_path, "r") as f:
+                    old_code = f.read()
 
-    print(test_output)
+                print("\n----------------------------------")
+                print("File:", file_path)
+                print("----------------------------------\n")
 
-    # ---------------------------------------------------
-    # 10. Save solution to memory
-    # ---------------------------------------------------
+                show_diff(old_code, new_code)
 
-    print("\nSaving solution to memory...\n")
+                apply_patch(file_path, new_code)
 
-    add_memory({
-        "task": task,
-        "solution": plan
-    })
+            except FileNotFoundError:
+                print("File not found:", file_path)
 
-    print("\nAgent execution completed.\n")
+        # ---------------------------------------
+        # Run tests
+        # ---------------------------------------
+
+        print("\nRunning tests...\n")
+
+        test_output = run_tests()
+
+        print(test_output)
+
+        # ---------------------------------------
+        # Save memory
+        # ---------------------------------------
+
+        add_memory({
+            "task": step,
+            "solution": plan
+        })
+
+    print("\n=================================")
+    print("Agent execution completed.")
+    print("=================================\n")
