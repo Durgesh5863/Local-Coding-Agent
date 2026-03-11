@@ -150,3 +150,26 @@ Open browser:
 http://localhost:6333/dashboard
 
 Now your vector database is ready.
+
+
+Inside Visual Studio Code, create a task.
+
+.vscode/tasks.json
+
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "AI Agent Task",
+      "type": "shell",
+      "command": "curl http://localhost:8000/task -d \"{\\\"task\\\": \\\"${input:agentTask}\\\"}\""
+    }
+  ],
+  "inputs": [
+    {
+      "id": "agentTask",
+      "type": "promptString",
+      "description": "AI task"
+    }
+  ]
+}

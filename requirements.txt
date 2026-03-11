@@ -3,3 +3,6 @@ sentence-transformers
 requests
 rich
 typer
+fastapi
+uvicorn
+requests

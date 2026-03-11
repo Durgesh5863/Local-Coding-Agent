@@ -15,7 +15,8 @@ Return steps as a numbered list.
 Task:
 {task}
 """
-
+    print("Sending prompt to Ollama...")
+    
     response = generate(prompt)
 
     steps = []
